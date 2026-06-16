@@ -3,6 +3,7 @@ import Groq from "groq-sdk";
 import {
   getAnonymousMessageCap,
   getAnonymousUsage,
+  getAnonymousUsageProvider,
   hasReachedAnonymousCap,
   incrementAnonymousUsage,
 } from "@/lib/anonymous-usage";
@@ -44,13 +45,15 @@ export async function POST(req: NextRequest) {
 
     const anonymousId = getCanonicalAnonymousId(req, body.anonymousId);
     const limit = getAnonymousMessageCap();
-    const currentUsage = getAnonymousUsage(anonymousId);
+    const provider = getAnonymousUsageProvider();
+    const currentUsage = await getAnonymousUsage(anonymousId);
 
-    if (hasReachedAnonymousCap(anonymousId)) {
+    if (await hasReachedAnonymousCap(anonymousId)) {
       const blockedResponse = NextResponse.json(
         {
           error: "Free limit reached. You have used all 5 anonymous messages.",
           anonymousId,
+          storage: provider,
           usage: {
             used: currentUsage.count,
             remaining: 0,
@@ -88,11 +91,12 @@ export async function POST(req: NextRequest) {
     });
 
     const reply = completion.choices[0]?.message?.content || "No response.";
-    const updatedUsage = incrementAnonymousUsage(anonymousId);
+    const updatedUsage = await incrementAnonymousUsage(anonymousId);
 
     const response = NextResponse.json({
       reply,
       anonymousId,
+      storage: provider,
       usage: {
         used: updatedUsage.count,
         remaining: Math.max(0, limit - updatedUsage.count),

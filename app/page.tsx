@@ -51,7 +51,8 @@ export default function Home() {
 
         {usage ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-300">
-            Anonymous free usage: {usage.used}/{usage.limit} used · {usage.remaining} remaining
+            Anonymous free usage: {usage.used}/{usage.limit} used ·{" "}
+            {usage.remaining} remaining
           </div>
         ) : null}
 
