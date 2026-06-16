@@ -9,6 +9,8 @@ import {
 } from "@/lib/anonymous-usage";
 import { consumeIpRateLimit, type IpRateLimitResult } from "@/lib/ip-rate-limit";
 
+export const runtime = "edge";
+
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
