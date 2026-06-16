@@ -1,4 +1,4 @@
-import { Redis } from "@upstash/redis";
+import { getRedisClient } from "@/lib/upstash";
 
 const MESSAGE_CAP = 5;
 const KEY_PREFIX = "anonymous_usage";
@@ -16,25 +16,6 @@ const inMemoryUsageStore =
   globalThis.__anonymousUsageStore__ ?? new Map<string, UsageRecord>();
 
 globalThis.__anonymousUsageStore__ = inMemoryUsageStore;
-
-let redisClient: Redis | null | undefined;
-
-function getRedisClient() {
-  if (redisClient !== undefined) {
-    return redisClient;
-  }
-
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!url || !token) {
-    redisClient = null;
-    return redisClient;
-  }
-
-  redisClient = new Redis({ url, token });
-  return redisClient;
-}
 
 function getRedisKey(anonymousId: string) {
   return `${KEY_PREFIX}:${anonymousId}`;
