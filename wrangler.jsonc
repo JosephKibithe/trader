@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "trader",
+  "account_id": "e6c19d2fe2fd3beae53da6edd2ebfd11",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-06-16",
   "compatibility_flags": [
