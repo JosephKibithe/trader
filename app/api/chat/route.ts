@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import Groq from "groq-sdk";
 import { authOptions } from "@/auth";
+import { executeReachTool } from "@/lib/agent-reach";
 import {
   getAnonymousMessageCap,
   getAnonymousUsage,
@@ -79,24 +80,137 @@ function getIpRateLimitPayload(ipRateLimit: IpRateLimitResult) {
 }
 
 async function createGroqReply(message: string) {
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a concise stock and crypto assistant. Keep answers short, practical, and low-hype.",
-      },
-      {
-        role: "user",
-        content: message,
-      },
-    ],
-    temperature: 0.4,
-    max_tokens: 300,
-  });
+  const messages: any[] = [
+    {
+      role: "system",
+      content:
+        "You are a concise stock and crypto assistant. Keep answers short, practical, and low-hype. " +
+        "You have access to real-time search and social tools via Agent Reach to find the latest news, stock/crypto prices, and information from the internet. " +
+        "If a user asks about anything that requires current or real-time information (like 'BTC price today', 'latest news', etc.), you MUST call the appropriate tool to fetch the latest data. " +
+        "Summarize the tool output concisely in your final response, citing key details."
+    },
+    {
+      role: "user",
+      content: message
+    }
+  ];
 
-  return completion.choices[0]?.message?.content || "No response.";
+  const tools: any[] = [
+    {
+      type: "function",
+      function: {
+        name: "search_web",
+        description: "Search the web for real-time information, news, facts, and latest data on any topic.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The search query (describe the ideal page or topic, semantically rich)."
+            }
+          },
+          required: ["query"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "fetch_webpage",
+        description: "Fetch and read the full content of a specific URL/webpage as clean text.",
+        parameters: {
+          type: "object",
+          properties: {
+            url: {
+              type: "string",
+              description: "The URL of the webpage to fetch."
+            }
+          },
+          required: ["url"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "search_twitter",
+        description: "Search Twitter/X for tweets, discussions, or user posts.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The search query for Twitter."
+            }
+          },
+          required: ["query"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "search_bilibili",
+        description: "Search Bilibili for video info and captions.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The search query for Bilibili."
+            }
+          },
+          required: ["query"]
+        }
+      }
+    }
+  ];
+
+  let turns = 0;
+  while (turns < 5) {
+    turns++;
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages,
+      tools,
+      tool_choice: "auto",
+      temperature: 0.4,
+      max_tokens: 600
+    });
+
+    const responseMessage = completion.choices[0]?.message;
+    if (!responseMessage) {
+      return "No response.";
+    }
+
+    if (!responseMessage.tool_calls || responseMessage.tool_calls.length === 0) {
+      return responseMessage.content || "No response.";
+    }
+
+    // Add assistant's response (holding tool calls) to messages
+    messages.push(responseMessage);
+
+    // Execute tool calls
+    for (const toolCall of responseMessage.tool_calls) {
+      const toolName = toolCall.function.name;
+      const toolArgs = JSON.parse(toolCall.function.arguments);
+
+      let toolResult = "";
+      try {
+        toolResult = await executeReachTool(toolName, toolArgs);
+      } catch (err: any) {
+        toolResult = `Error executing tool: ${err?.message || err}`;
+      }
+
+      messages.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
+        content: toolResult
+      });
+    }
+  }
+
+  return "Research limit reached.";
 }
 
 export async function POST(req: NextRequest) {
